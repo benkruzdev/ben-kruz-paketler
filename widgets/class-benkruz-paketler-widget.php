@@ -29,25 +29,45 @@ class BenKruz_Paketler_Widget extends \Elementor\Widget_Base {
       'tab' => \Elementor\Controls_Manager::TAB_CONTENT,
     ]);
 
-    $this->add_control('tab_1_label', [
-      'label' => 'Sekme 1',
-      'type' => \Elementor\Controls_Manager::TEXT,
-      'default' => 'LGS',
+    $this->add_control('tab_count', [
+      'label' => 'Sekme Sayısı',
+      'type' => \Elementor\Controls_Manager::SELECT,
+      'default' => '2',
+      'options' => [
+        '1' => '1',
+        '2' => '2',
+        '3' => '3',
+        '4' => '4',
+        '5' => '5',
+        '6' => '6',
+      ],
     ]);
 
-    $this->add_control('tab_2_label', [
-      'label' => 'Sekme 2',
-      'type' => \Elementor\Controls_Manager::TEXT,
-      'default' => 'YKS',
-    ]);
+    for ($i = 1; $i <= 6; $i++) {
+      $visible_when = [];
+      for ($j = $i; $j <= 6; $j++) { $visible_when[] = (string) $j; }
 
-    $this->add_control('default_tab', [
+      $this->add_control("tab_{$i}_label", [
+        'label' => "Sekme {$i} Başlığı",
+        'type' => \Elementor\Controls_Manager::TEXT,
+        'default' => ($i === 1 ? 'LGS' : ($i === 2 ? 'YKS' : "Sekme {$i}")),
+        'condition' => [
+          'tab_count' => $visible_when,
+        ],
+      ]);
+    }
+
+    $this->add_control('default_tab_index', [
       'label' => 'Varsayılan Sekme',
       'type' => \Elementor\Controls_Manager::SELECT,
-      'default' => 'tab1',
+      'default' => '1',
       'options' => [
-        'tab1' => 'Sekme 1',
-        'tab2' => 'Sekme 2',
+        '1' => 'Sekme 1',
+        '2' => 'Sekme 2',
+        '3' => 'Sekme 3',
+        '4' => 'Sekme 4',
+        '5' => 'Sekme 5',
+        '6' => 'Sekme 6',
       ],
     ]);
 
@@ -173,29 +193,27 @@ class BenKruz_Paketler_Widget extends \Elementor\Widget_Base {
 
     // --- REPEATER BİTİŞ ---
 
-    $this->start_controls_section('lgs_section', [
-      'label' => 'LGS Paketleri',
-      'tab' => \Elementor\Controls_Manager::TAB_CONTENT,
-    ]);
-    $this->add_control('lgs_packages', [
-      'label' => 'LGS Paketleri',
-      'type' => \Elementor\Controls_Manager::REPEATER,
-      'fields' => $pkg->get_controls(),
-      'title_field' => '{{{ title }}}',
-    ]);
-    $this->end_controls_section();
+    for ($i = 1; $i <= 6; $i++) {
+      $visible_when = [];
+      for ($j = $i; $j <= 6; $j++) { $visible_when[] = (string) $j; }
 
-    $this->start_controls_section('yks_section', [
-      'label' => 'YKS Paketleri',
-      'tab' => \Elementor\Controls_Manager::TAB_CONTENT,
-    ]);
-    $this->add_control('yks_packages', [
-      'label' => 'YKS Paketleri',
-      'type' => \Elementor\Controls_Manager::REPEATER,
-      'fields' => $pkg->get_controls(),
-      'title_field' => '{{{ title }}}',
-    ]);
-    $this->end_controls_section();
+      $this->start_controls_section("tab_{$i}_packages_section", [
+        'label' => "Sekme {$i} Paketleri",
+        'tab' => \Elementor\Controls_Manager::TAB_CONTENT,
+        'condition' => [
+          'tab_count' => $visible_when,
+        ],
+      ]);
+
+      $this->add_control("tab_{$i}_packages", [
+        'label' => "Sekme {$i} Paketleri",
+        'type' => \Elementor\Controls_Manager::REPEATER,
+        'fields' => $pkg->get_controls(),
+        'title_field' => '{{{ title }}}',
+      ]);
+
+      $this->end_controls_section();
+    }
 
     /** STYLE: Layout **/
     $this->start_controls_section('style_layout', [
@@ -1023,25 +1041,55 @@ class BenKruz_Paketler_Widget extends \Elementor\Widget_Base {
   protected function render() {
     $s = $this->get_settings_for_display();
     $scope_id = 'bkpk-' . $this->get_id();
-    $default = $s['default_tab'] ?? 'tab1';
-    $tab1 = $s['tab_1_label'] ?? 'LGS';
-    $tab2 = $s['tab_2_label'] ?? 'YKS';
-    $lgs = $s['lgs_packages'] ?? [];
-    $yks = $s['yks_packages'] ?? [];
+    $tab_count = max(1, min(6, intval($s['tab_count'] ?? 2)));
+    $default_tab_index = max(1, min($tab_count, intval($s['default_tab_index'] ?? 1)));
+    $default = 'tab' . $default_tab_index;
+
+    $tabs = [];
+    for ($i = 1; $i <= $tab_count; $i++) {
+      $label = trim((string) ($s["tab_{$i}_label"] ?? ''));
+      if ($label === '') {
+        $label = "Sekme {$i}";
+      }
+
+      $tabs[] = [
+        'key' => 'tab' . $i,
+        'label' => $label,
+        'packages' => $s["tab_{$i}_packages"] ?? [],
+      ];
+    }
+
+    // Geriye dönük uyumluluk: eski LGS/YKS alanları doluysa en azından ekranda göster.
+    if (empty($tabs) || (empty($tabs[0]['packages']) && !empty($s['lgs_packages'] ?? []))) {
+      $tabs = [
+        [
+          'key' => 'tab1',
+          'label' => $s['tab_1_label'] ?? 'LGS',
+          'packages' => $s['lgs_packages'] ?? [],
+        ],
+        [
+          'key' => 'tab2',
+          'label' => $s['tab_2_label'] ?? 'YKS',
+          'packages' => $s['yks_packages'] ?? [],
+        ],
+      ];
+      $default = $s['default_tab'] ?? 'tab1';
+    }
     ?>
     <div class="bk-paketler" id="<?php echo esc_attr($scope_id); ?>" data-default="<?php echo esc_attr($default); ?>">
       <div class="bk-toggle">
-        <button type="button" class="bk-toggle__btn" data-bk-tab="tab1"><?php echo esc_html($tab1); ?></button>
-        <button type="button" class="bk-toggle__btn" data-bk-tab="tab2"><?php echo esc_html($tab2); ?></button>
+        <?php foreach ($tabs as $tab): ?>
+          <button type="button" class="bk-toggle__btn" data-bk-tab="<?php echo esc_attr($tab['key']); ?>">
+            <?php echo esc_html($tab['label']); ?>
+          </button>
+        <?php endforeach; ?>
       </div>
 
-      <div class="bk-tab" data-bk-panel="tab1"><div class="bk-grid">
-        <?php foreach ($lgs as $i => $pkg) { $this->render_package($pkg, $i, $scope_id); } ?>
-      </div></div>
-
-      <div class="bk-tab" data-bk-panel="tab2"><div class="bk-grid">
-        <?php foreach ($yks as $i => $pkg) { $this->render_package($pkg, $i, $scope_id); } ?>
-      </div></div>
+      <?php foreach ($tabs as $tab_index => $tab): ?>
+        <div class="bk-tab" data-bk-panel="<?php echo esc_attr($tab['key']); ?>"><div class="bk-grid">
+          <?php foreach (($tab['packages'] ?? []) as $pkg_index => $pkg) { $this->render_package($pkg, $tab_index . '-' . $pkg_index, $scope_id); } ?>
+        </div></div>
+      <?php endforeach; ?>
     </div>
     <?php
   }
